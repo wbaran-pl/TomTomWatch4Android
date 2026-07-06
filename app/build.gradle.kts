@@ -30,7 +30,7 @@ android {
         val clientId = stravaProperties.getProperty("strava.client_id") ?: ""
         val clientSecret = stravaProperties.getProperty("strava.client_secret") ?: ""
         val redirectScheme = stravaProperties.getProperty("strava.redirect_scheme") ?: "tomtomwatch"
-        val redirectHost = stravaProperties.getProperty("strava.redirect_host") ?: "strava"
+        val redirectHost = stravaProperties.getProperty("strava.redirect_host") ?: "localhost"
 
         buildConfigField("String", "STRAVA_CLIENT_ID", "\"$clientId\"")
         buildConfigField("String", "STRAVA_CLIENT_SECRET", "\"$clientSecret\"")
