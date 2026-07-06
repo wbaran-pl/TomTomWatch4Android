@@ -904,9 +904,10 @@ public class GpxWriter implements TrackWriter
 
     }
 
-    public void writeTrackToStream(OutputStream outputStream, Activity track, String appName)
-    {
-        writeTrackToFile(new OutputStreamWriter(outputStream), track, appName);
+    public void writeTrackToStream(OutputStream outputStream, Activity track, String appName) throws IOException {
+        try (Writer writer = new OutputStreamWriter(outputStream)) {
+            writeTrackToFile(writer, track, appName);
+        }
     }
 
 }
