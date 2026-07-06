@@ -6,25 +6,21 @@
 
 package net.studioblueplanet.usb;
 
-import java.util.List;
+import android.hardware.usb.UsbConstants;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbEndpoint;
+import android.hardware.usb.UsbInterface;
+import android.hardware.usb.UsbRequest;
+
+import java.nio.ByteBuffer;
+import java.util.Optional;
 
 import net.studioblueplanet.logger.DebugLogger;
 
-import javax.usb.UsbDevice;
-import javax.usb.UsbException;
-import javax.usb.UsbDisconnectedException;
-import javax.usb.UsbNotClaimedException;
-import javax.usb.UsbHostManager;
-import javax.usb.UsbHub;
-import javax.usb.UsbServices;
-import javax.usb.UsbPort;
-import javax.usb.UsbConfiguration;
-import javax.usb.UsbInterface;
-import javax.usb.UsbEndpoint;
-import javax.usb.UsbClaimException;
-import javax.usb.UsbPipe;
-import javax.usb.UsbDeviceDescriptor;
-import javax.usb.UsbInterfacePolicy;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
 
 /**
  * This class represents the connection to the USB watch. It contains functionality
@@ -45,14 +41,44 @@ public class UsbConnection
         DEVICETYPE_SPARK_CARDIO
     };    
 
+    /**
+     * Descriptor for the watch device types
+     */
+    @Getter
+    @RequiredArgsConstructor
+    private static class WatchDescriptor {
+        private final int writeEndpoint;
+        private final int readEndpoint;
+        private final int packetSize;
+        private final int fileReadChunkSize;
+        private final int fileWriteChunkSize;
+
+        public static WatchDescriptor getDescriptor(DeviceType deviceType) {
+            switch (deviceType) {
+                case DEVICETYPE_MULTISPORTS:
+                    return new WatchDescriptor(0x05, 0x84, 64, 50, 54);
+                case DEVICETYPE_SPARK_MUSIC:
+                case DEVICETYPE_SPARK_CARDIO:
+                    return new WatchDescriptor(0x02, 0x81, 256, 242, 246);
+                default:
+                    throw new IllegalArgumentException("Unknown device type: " + deviceType);
+            }
+        }
+    }
+
     public static final int                 VARIABLE_LENGTH=-1;
     
     private UsbDevice                       device;
     private UsbInterface                    iface;
+    private UsbDeviceConnection             connection;
+    private UsbRequest                      outRequest = new UsbRequest();
+    private UsbRequest                      inRequest = new UsbRequest();
     private DeviceType                      deviceType;
+    private WatchDescriptor                 watchDescriptor;
     private byte                            txMessageCounter;
     private byte                            txPrevMessageCounter;
-    
+
+    @Getter
     private boolean                         isError;
     private String                          lastError;
     
@@ -62,10 +88,11 @@ public class UsbConnection
     /**
      * The constructor. Initializes the instance.
      */
-    public UsbConnection()
+    public UsbConnection(UsbDevice device, UsbDeviceConnection connection, UsbInterface iface)
     {
-        device              =null;
-        iface               =null;
+        this.device         =device;
+        this.iface          =iface;
+        this.connection     =connection;
         deviceType          =DeviceType.DEVICETYPE_UNKNOWN;
         txMessageCounter    =0;
         txPrevMessageCounter=-1;
@@ -80,77 +107,27 @@ public class UsbConnection
      */
     public void connect()
     {
-        UsbServices         services;
-        UsbConfiguration    configuration;
-
-        isError     =false;
-        lastError   ="Ok";
-        try
-        {
-            services = UsbHostManager.getUsbServices();
-
-            if (device==null)
-            {
-                device          =findDevice(services.getRootUsbHub(), (short)0x1390, (short)0x7474);
-                if (device!=null)
-                {
-                    deviceType  =DeviceType.DEVICETYPE_MULTISPORTS;
-                    DebugLogger.info("Connected to TomTom Multisport");
-                }
-            }
-            if (device==null)
-            {
-                device          =findDevice(services.getRootUsbHub(), (short)0x1390, (short)0x7475);
-                if (device!=null)
-                {
-                    deviceType  =DeviceType.DEVICETYPE_SPARK_MUSIC;
-                    DebugLogger.info("Connected to TomTom Spark Music/Runner Music/Adventurer");
-
-                }
-            }
-            if (device==null)
-            {
-                device          =findDevice(services.getRootUsbHub(), (short)0x1390, (short)0x7477);
-                if (device!=null)
-                {
-                    deviceType  =DeviceType.DEVICETYPE_SPARK_CARDIO;
-                    DebugLogger.info("Connected to TomTom Spark Cardio/Runner Cardio");
-                }
-            }
+        if (device.getVendorId() == (short)0x1390 && device.getProductId() == (short)0x7474) {
+            deviceType = DeviceType.DEVICETYPE_MULTISPORTS;
+        } else if (device.getVendorId() == (short)0x1390 && device.getProductId() == (short)0x7475) {
+            deviceType = DeviceType.DEVICETYPE_SPARK_MUSIC;
+        } else if (device.getVendorId() == (short)0x1390 && device.getProductId() == (short)0x7477) {
+            deviceType = DeviceType.DEVICETYPE_SPARK_CARDIO;
+        } else {
+            deviceType = DeviceType.DEVICETYPE_UNKNOWN;
         }
-        catch (UsbException e)
-        {
-            isError     =true;
-            lastError   ="USB Error: "+e.getMessage();
-            DebugLogger.error(lastError);
-        }
+        // claim
+        connection.claimInterface(iface, true);
 
-        if (device!=null)
-        {
-            configuration       = device.getActiveUsbConfiguration();
-            iface               = configuration.getUsbInterface((byte) 0);
-
-            try
-            {
-                // For Linux: force claim if the interface has been claimed by the kernel
-                iface.claim(new ForcePolicy());
-                DebugLogger.info("USB interface claimed");
-            }
-            catch(UsbClaimException e)
-            {
-                isError     =true;
-                lastError   ="USB Error: "+e.getMessage();
-            }
-            catch (UsbException e)
-            {
-                isError     =true;
-                lastError   ="USB Error: "+e.getMessage();
-            }
-        } 
-        else
-        {
-            isError     =true;
-            lastError   ="No valid USB device found";            
+        try {
+            watchDescriptor = WatchDescriptor.getDescriptor(deviceType);
+            findEndpoint(UsbConstants.USB_DIR_OUT, watchDescriptor.getWriteEndpoint())
+                    .ifPresent(ep -> outRequest.initialize(connection, ep));
+            findEndpoint(UsbConstants.USB_DIR_IN, watchDescriptor.getReadEndpoint())
+                    .ifPresent(ep -> inRequest.initialize(connection, ep));
+        } catch (IllegalArgumentException e) {
+            isError = true;
+            lastError = "USB: Unknown device type";
         }
         if (isError)
         {
@@ -163,128 +140,22 @@ public class UsbConnection
      */
     public void disconnect()
     {
-        
-        if (iface!=null)
-        {
-            try
-            {
-                iface.release();
-            }
-            catch(UsbClaimException e)
-            {
-                isError=true;
-                lastError="USB claim exception during release: "+e.getMessage();
-            }
-            catch (UsbException e)
-            {
-                isError=true;
-                lastError="USB exception during release: "+e.getMessage();
-            }
-            catch (UsbDisconnectedException e)
-            {
-                isError=true;
-                lastError="USB disconnect exception: "+e.getMessage();
-            }
-      }
-      if (isError)
-      {
-          DebugLogger.error(lastError);
-      }
-      deviceType    =DeviceType.DEVICETYPE_UNKNOWN;
-      device        =null;
+        Optional.ofNullable(inRequest).ifPresent(UsbRequest::close);
+        Optional.ofNullable(outRequest).ifPresent(UsbRequest::close);
+        connection.releaseInterface(iface);
+        deviceType  =DeviceType.DEVICETYPE_UNKNOWN;
+        device        =null;
     }
-    
-    
-    /* ********************************************************************************************\
-    * 
-    * USB METHODS - DEBUGGING
-    * 
-    \* *******************************************************************************************/
-    /**
-     * Find the device identified by vendorId and productId
-     * @param hub
-     * @param vendorId
-     * @param productId
-     * @return 
-     */
-    @SuppressWarnings("unchecked")
-    private UsbDevice findDevice(UsbHub hub, short vendorId, short productId)
-    {
-        for (UsbDevice device : (List<UsbDevice>) hub.getAttachedUsbDevices())
-        {
-            UsbDeviceDescriptor desc = device.getUsbDeviceDescriptor();
-            if (desc.idVendor() == vendorId && desc.idProduct() == productId) 
-            {
-                return device;
-            }
-            if (device.isUsbHub())
-            {
-                device = findDevice((UsbHub) device, vendorId, productId);
-                if (device != null)
-                {
-                    return device;
-                }
+
+    private Optional<UsbEndpoint> findEndpoint(int direction, int address) {
+        for (int ii = 0; ii < iface.getEndpointCount();ii++) {
+            var ep = iface.getEndpoint(ii);
+            if (direction == ep.getDirection() && (address < 0 || address == ep.getAddress())) {
+                return Optional.of(ep);
             }
         }
-        return null;
-    }    
-    
-    /**
-     * Dumps the specified USB device to stdout.
-     * @param device The USB device to dump.
-     */
-    @SuppressWarnings("unchecked")
-    private static void dumpDevice(final UsbDevice device)
-    {
-        // Dump information about the device itself
-        System.out.println(device);
-        final UsbPort port = device.getParentUsbPort();
-        if (port != null)
-        {
-            System.out.println("Connected to port: " + port.getPortNumber());
-            System.out.println("Parent: " + port.getUsbHub());
-        }
-
-        // Dump device descriptor
-        System.out.println(device.getUsbDeviceDescriptor());
-
-        // Process all configurations
-        for (UsbConfiguration configuration: (List<UsbConfiguration>) device
-            .getUsbConfigurations())
-        {
-            // Dump configuration descriptor
-            System.out.println(configuration.getUsbConfigurationDescriptor());
-
-            // Process all interfaces
-            for (UsbInterface iface: (List<UsbInterface>) configuration
-                .getUsbInterfaces())
-            {
-                // Dump the interface descriptor
-                System.out.println(iface.getUsbInterfaceDescriptor());
-
-                // Process all endpoints
-                for (UsbEndpoint endpoint: (List<UsbEndpoint>) iface
-                    .getUsbEndpoints())
-                {
-                    // Dump the endpoint descriptor
-                    System.out.println(endpoint.getUsbEndpointDescriptor());
-                }
-            }
-        }
-
-        System.out.println();
-
-        // Dump child devices if device is a hub
-        if (device.isUsbHub())
-        {
-            final UsbHub hub = (UsbHub) device;
-            for (UsbDevice child: (List<UsbDevice>) hub.getAttachedUsbDevices())
-            {
-                dumpDevice(child);
-            }
-        }
-    }    
-    
+        return Optional.empty();
+    }
     
     /* ********************************************************************************************\
     * 
@@ -362,21 +233,13 @@ public class UsbConnection
     public void sendRequest(byte msg, UsbPacket txData, UsbPacket rxData, byte expectedRxMsg, int expectedRxLength)
     {
         byte[]          txPacket;
-        int             i;
         int             packetSize;
-        byte            readEndpoint;
-        byte            writeEndpoint;
         int             length;
-        UsbEndpoint     endpoint;
-        UsbPipe         pipe;
-        
+
         // Initialize
-        readEndpoint    =(byte)0x00;
-        writeEndpoint   =(byte)0x00;
-        packetSize      =0;
         isError         =false;
-        
-        // Length as integeer
+
+        // Length as integer
         length=(txData.length)&0xff;
         
         // Check if the length of the data in the packet is within limits
@@ -389,27 +252,15 @@ public class UsbConnection
         
         if (!isError)
         {
-            // USB Connection parameters
-            switch (deviceType)
+            if (watchDescriptor == null)
             {
-                case DEVICETYPE_MULTISPORTS:
-                    packetSize      =64;
-                    writeEndpoint   =(byte)0x05;
-                    readEndpoint    =(byte)0x84;
-                    break;
-                case DEVICETYPE_SPARK_MUSIC:
-                case DEVICETYPE_SPARK_CARDIO:
-                    packetSize      =256;
-                    writeEndpoint   =(byte)0x02;
-                    readEndpoint    =(byte)0x81;
-                    break;
-                default:
-                    isError=true;
-                    lastError="No valid device found";
+                isError=true;
+                lastError="No valid device found";
             }
- 
-            if (!isError)
+            else
             {
+                packetSize = watchDescriptor.getPacketSize();
+
                 // Construct the overhead bytes
                 txPacket            =new byte[packetSize];
                 txPacket[0]         =0x09;                          // request
@@ -421,122 +272,31 @@ public class UsbConnection
                 
                 // Construct the RX buffer size
                 rxBuffer            =new byte[packetSize];
-                
-                
-                // Copy the data 
-/*
-                i=0;
-                while (i<length)
-                {
-                    txPacket[4+i]=txData.data[i];
-                    i++;
-                }
-*/
-                System.arraycopy(txData.data, 0, txPacket, 4, length);
 
-                // Put the request on the line :-)
-                endpoint = iface.getUsbEndpoint(writeEndpoint);
-                try
-                {
-                    pipe = endpoint.getUsbPipe();
-                    pipe.open();
-                    try
-                    {
-                        int sent = pipe.syncSubmit(txPacket);
+                System.arraycopy(txData.data, 0, txPacket, 4, length);
+                if (outRequest.queue(ByteBuffer.wrap(txPacket))) {
+                    var sent = connection.requestWait();
+//                    Log.d("UsbConnection", "sent: " + (sent != null ? sent.getClientData() : "null"));
+
+                    if (inRequest.queue(ByteBuffer.wrap(rxBuffer))) {
+                        var rcvd = connection.requestWait();
+//                        Log.d("UsbConnection", "rcvd: " + (rcvd != null ? rcvd.getClientData() : "null"));
+                    } else {
+                        isError = true;
                     }
-                    finally
-                    {
-                        pipe.close();
-                    }
+                } else {
+                    isError = true;
                 }
-                catch(UsbException e)
-                {
-                    isError=true;
-                    lastError="USB Error while sending packet: "+e.getMessage();
+
+                // Validate the response
+                if (validateResponse(msg, rxBuffer, expectedRxMsg, expectedRxLength)) {
+                    // If valid, copy the response
+                    length = (rxBuffer[1] & 0xff) - 2;
+                    System.arraycopy(rxBuffer, 4, rxData.data, 0, length);
+                    rxData.length = (byte) length;
                 }
-                catch(UsbDisconnectedException e)
-                {
-                    isError=true;
-                    lastError="USB Error while sending packet: "+e.getMessage();
-                }
-                catch(UsbNotClaimedException e)
-                {
-                    isError=true;
-                    lastError="USB Error while sending packet: "+e.getMessage();
-                }
-            }            
-        }
-        if (!isError)
-        {
-            // Wait for the response.
-            endpoint = iface.getUsbEndpoint(readEndpoint);
-            try
-            {
-                pipe = endpoint.getUsbPipe();
-                pipe.open();
-                try
-                {
-                    // Funny enough rxLengh=0 after the call...
-                    rxLength = (byte)pipe.syncSubmit(rxBuffer);
-                    
-                    // Validate the response
-                    // 
-                    if (validateResponse(msg, rxBuffer, expectedRxMsg, expectedRxLength))
-                    {
-                        // If valid, copy the response 
-                        length=(rxBuffer[1]&0xff)-2;
-                        /*
-                        i=0;
-                        while (i<length)
-                        {
-                            rxData.data[i]=rxBuffer[i+4];
-                            i++;
-                        }
-                        */
-                        System.arraycopy(rxBuffer, 4, rxData.data, 0, length);
-                        rxData.length=(byte)length;
-                    }
-                    else
-                    {
-                        // isError and lastError are already set
-                    }
-                    
-                }
-                finally
-                {
-                    pipe.close();
-                }            
-            }
-            catch (UsbException e)
-            {
-                isError=true;
-                lastError="USB Error: error while receiving. "+e.getMessage();
             }
         }
-        
-       
-        if (isError)
-        {
-            DebugLogger.error(lastError);
-        }
-    }
-    
-    /**
-     * Indicates the result of last method
-     * @return True if an error occurred, false if not
-     */
-    public boolean isError()
-    {
-        return isError;
-    }
-    
-    /**
-     * Get a description of the last error.
-     * @return The error description as String
-     */
-    public String getLastError()
-    {
-        return lastError;
     }
     
     /**
@@ -548,22 +308,15 @@ public class UsbConnection
     {
         int chunkSize;
         
-        chunkSize=-1;
-        switch (deviceType)
+        if (watchDescriptor != null)
         {
-            case DEVICETYPE_MULTISPORTS:
-                chunkSize=50;
-                break;
-            case DEVICETYPE_SPARK_MUSIC:
-            case DEVICETYPE_SPARK_CARDIO:
-                chunkSize=242;
-                break;
-            default:
-                isError=true;
-                lastError="No valid device known";
+            chunkSize = watchDescriptor.getFileReadChunkSize();
         }
-        if (isError)
+        else
         {
+            chunkSize=-1;
+            isError=true;
+            lastError="No valid device known";
             DebugLogger.error(lastError);
         }
         return chunkSize;
@@ -577,22 +330,15 @@ public class UsbConnection
     {
         int chunkSize;
         
-        chunkSize=-1;
-        switch (deviceType)
+        if (watchDescriptor != null)
         {
-            case DEVICETYPE_MULTISPORTS:
-                chunkSize=54;
-                break;
-            case DEVICETYPE_SPARK_MUSIC:
-            case DEVICETYPE_SPARK_CARDIO:
-                chunkSize=246;
-                break;
-            default:
-                isError=true;
-                lastError="No valid device known";
+            chunkSize = watchDescriptor.getFileWriteChunkSize();
         }
-        if (isError)
+        else
         {
+            chunkSize=-1;
+            isError=true;
+            lastError="No valid device known";
             DebugLogger.error(lastError);
         }
         return chunkSize;
@@ -605,28 +351,7 @@ public class UsbConnection
      */
     public String getDeviceSerialNumber()
     {
-        String serial;
-
-        serial=null;
-        
-        if (device!=null)
-        {
-            try
-            {
-                final UsbDeviceDescriptor desc = device.getUsbDeviceDescriptor();
-                serial=device.getString(desc.iSerialNumber());
-
-//                serial=device.getSerialNumberString();
-            }
-            catch (Exception e)
-            {
-                //isError=true;
-                //lastError="Error getting device serial number";
-                DebugLogger.error("Error getting device serial number: "+e.getMessage());
-            }
-                
-        }
-        return serial;
+        return device != null ? device.getSerialNumber() : null;
     }
 
     

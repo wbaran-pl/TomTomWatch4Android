@@ -1,0 +1,482 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- Global Header -->
+    <LinearLayout
+        android:id="@+id/global_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="#E0E0E0"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/header_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="TomTomWatch"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_header_disconnect"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Disconnect"
+            android:textSize="10sp"
+            android:visibility="gone"
+            android:layout_marginEnd="8dp"/>
+
+        <Button
+            android:id="@+id/btn_header_back"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Back"
+            android:textSize="10sp"
+            android:visibility="gone"
+            android:layout_marginEnd="8dp"/>
+
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:background="?android:attr/selectableItemBackground"
+            android:contentDescription="Settings"
+            android:visibility="visible" />
+    </LinearLayout>
+
+    <!-- Main Content Area -->
+    <FrameLayout
+        android:id="@+id/main_content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Pre-connect View -->
+        <LinearLayout
+            android:id="@+id/pre_connect_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="USB Devices"
+                android:background="#CCCCCC"
+                android:padding="8dp"
+                android:textStyle="bold" />
+
+            <ListView
+                android:id="@+id/device_list"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:divider="@android:color/darker_gray"
+                android:dividerHeight="1dp" />
+
+            <TextView
+                android:id="@+id/pre_connect_info"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="16dp"
+                android:text="Select a device to connect..."
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/cache_size_info"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="4dp"
+                android:text="Map Cache: 0 KB"
+                android:gravity="center"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_strava_login"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Login to Strava"
+                android:backgroundTint="#FC4C02"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btn_offline_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Browse Local Storage" />
+
+            <Button
+                android:id="@+id/btn_quit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Quit" />
+        </LinearLayout>
+
+        <!-- Connected View (Online Mode) -->
+        <LinearLayout
+            android:id="@+id/connected_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Watch Info Grid -->
+            <LinearLayout
+                android:id="@+id/watch_info_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="8dp"
+                android:background="#F0F0F0"
+                android:gravity="center_vertical">
+
+                <GridLayout
+                    android:id="@+id/info_grid"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:columnCount="2">
+
+                    <TextView android:text="Time:" android:textStyle="bold" android:paddingEnd="4dp" android:textSize="10sp"/>
+                    <TextView android:id="@+id/watch_time_val" android:text="N/A" android:textSize="10sp"/>
+
+                    <TextView android:text="Prod ID:" android:textStyle="bold" android:paddingEnd="4dp" android:textSize="10sp"/>
+                    <TextView android:id="@+id/product_id_val" android:text="N/A" android:textSize="10sp" android:paddingEnd="12dp"/>
+
+                    <TextView android:text="Firmware:" android:textStyle="bold" android:paddingEnd="8dp" android:textSize="10sp"/>
+                    <TextView android:id="@+id/firmware_val" android:text="N/A" android:textSize="10sp"/>
+
+                    <TextView android:text="Serial:" android:textStyle="bold" android:paddingEnd="8dp" android:textSize="10sp"/>
+                    <TextView android:id="@+id/serial_val" android:text="N/A" android:textSize="10sp"/>
+                </GridLayout>
+
+                <Button
+                    android:id="@+id/btn_gps_quickfix"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="GPS QuickFix"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/progress_bar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="1000"
+                android:progress="0" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:id="@+id/get_activities_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:visibility="visible">
+
+                    <Button
+                        android:id="@+id/btn_get_activities"
+                        android:layout_width="200dp"
+                        android:layout_height="wrap_content"
+                        android:text="Get Activities" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/activities_list_area"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <org.osmdroid.views.MapView
+                        android:id="@+id/map_view"
+                        android:layout_width="match_parent"
+                        android:layout_height="200dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Watch Files"
+                        android:background="#CCCCCC"
+                        android:padding="4dp"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
+                    <ListView
+                        android:id="@+id/file_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:divider="@android:color/darker_gray"
+                        android:dividerHeight="1dp" />
+
+                    <Button
+                        android:id="@+id/btn_download_all"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Download All" />
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Offline View -->
+        <LinearLayout
+            android:id="@+id/offline_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <LinearLayout
+                    android:id="@+id/offline_list_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical">
+
+                    <ListView
+                        android:id="@+id/offline_file_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:divider="@android:color/darker_gray"
+                        android:dividerHeight="1dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/offline_preview_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <org.osmdroid.views.MapView
+                        android:id="@+id/offline_map_view"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1" />
+
+                    <TextView
+                        android:id="@+id/offline_activity_info"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="#F0F0F0"
+                        android:padding="8dp"
+                        android:textSize="11sp"
+                        android:typeface="monospace"
+                        android:text="Activity Info" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:padding="8dp">
+
+                        <Button
+                            android:id="@+id/btn_export_gpx"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="GPX"
+                            android:textSize="12sp" />
+
+                        <Button
+                            android:id="@+id/btn_export_strava"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Strava"
+                            android:textSize="12sp"
+                            android:backgroundTint="#FC4C02"
+                            android:textColor="#FFFFFF" />
+
+                        <Button
+                            android:id="@+id/btn_close_preview"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Close"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Configuration View -->
+        <ScrollView
+            android:id="@+id/settings_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:background="#FFFFFF"
+            android:padding="16dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Configuration"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="16dp"/>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Storage Directory"
+                    android:textStyle="bold"/>
+                <TextView
+                    android:id="@+id/settings_storage_path"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Not set"
+                    android:padding="8dp"/>
+                <Button
+                    android:id="@+id/btn_settings_select_folder"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Select Folder"/>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Strava Client ID"
+                    android:textStyle="bold"
+                    android:layout_marginTop="16dp"/>
+                <EditText
+                    android:id="@+id/edit_settings_strava_id"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"/>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Strava Client Secret"
+                    android:textStyle="bold"
+                    android:layout_marginTop="8dp"/>
+                <EditText
+                    android:id="@+id/edit_settings_strava_secret"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"/>
+
+                <!-- Advanced Settings Guard -->
+                <CheckBox
+                    android:id="@+id/check_advanced_guard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="I know what I am doing"
+                    android:layout_marginTop="24dp"
+                    android:textStyle="italic"/>
+
+                <!-- Advanced Settings Section -->
+                <LinearLayout
+                    android:id="@+id/advanced_settings_area"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Advanced Settings"
+                        android:textStyle="bold"
+                        android:textSize="16sp"
+                        android:layout_marginTop="8dp"
+                        android:paddingTop="8dp"
+                        android:background="#F0F0F0"
+                        android:paddingBottom="8dp"
+                        android:paddingStart="4dp"/>
+
+                    <LinearLayout
+                        android:id="@+id/advanced_settings_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingTop="8dp"/>
+
+                </LinearLayout>
+                <Button
+                    android:id="@+id/btn_settings_save"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Save Configuration"
+                    android:layout_marginTop="24dp"/>
+            </LinearLayout>
+        </ScrollView>
+    </FrameLayout>
+
+    <!-- Status Area -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="140dp"
+        android:background="#F0F0F0"
+        android:orientation="vertical">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@android:color/darker_gray" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#E0E0E0"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                paddingStart="8dp"
+                android:text="Status Log"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/strava_user_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Strava: Not Logged In"
+                android:textSize="10sp"
+                android:textStyle="italic" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/status_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <TextView
+                android:id="@+id/status_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="Status: Ready"
+                android:textSize="11sp"
+                android:typeface="monospace" />
+        </ScrollView>
+    </LinearLayout>
+
+</LinearLayout>

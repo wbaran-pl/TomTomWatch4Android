@@ -9,7 +9,6 @@ package net.studioblueplanet.tomtomwatch;
 import net.studioblueplanet.ttbin.Activity;
 import net.studioblueplanet.usb.UsbFile;
 
-import java.awt.image.BufferedImage;
 
 /**
  * Collection of the raw data and accompanying activity
@@ -24,10 +23,7 @@ public class ActivityData
     
     /** Indicates whether the ttbin file has been saved to disk */
     public boolean          ttbinSaved      = false;
-    
-    /** Google map image, if the file has been displayed */
-    public BufferedImage    mapImage        =null;
-    
+
     /** Remark set when  mapImage=null (i.e. not defined)*/
     public String           mapImageRemark  ="Map image not defined";
 }

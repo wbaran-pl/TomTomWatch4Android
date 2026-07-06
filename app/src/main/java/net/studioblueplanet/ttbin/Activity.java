@@ -11,6 +11,8 @@ import net.studioblueplanet.settings.ConfigSettings;
 import net.studioblueplanet.generics.PolyLineEncoder;
 
 import hirondelle.date4j.DateTime;
+import lombok.SneakyThrows;
+
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -1207,6 +1209,7 @@ public class Activity
         return url;
     }
     
+    @SneakyThrows
     public boolean processGoogleHeightServiceResults(byte[] heights)
     {
         JSONObject                  jsonObj;

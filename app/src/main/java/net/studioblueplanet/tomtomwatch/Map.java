@@ -5,35 +5,13 @@
  */
 package net.studioblueplanet.tomtomwatch;
 
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-
 /**
  * This class represents the map function, showing a map with a route.
  * @author jorgen
  */
-public abstract class Map 
+public abstract class Map
 {
 
-
-    
-    protected final JPanel              panel;
-    protected final JLabel              label;
-    protected final int                 panelWidth;
-    protected final int                 panelHeight;
-    
-    
-    
-    public Map(JPanel panel)
-    {
-        this.panel  =panel;
-        label       = new JLabel();
-        panel.add(label);     
-        panelWidth  =panel.getWidth();
-        panelHeight =panel.getHeight();
-        
-    }
-    
    /**
      * This method show the track in this frame on a google map
      * @param activityData The activity data structure containing the track (Activity) to show

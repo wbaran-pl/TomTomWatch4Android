@@ -21,7 +21,6 @@ import java.util.Iterator;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 import java.io.StringReader;
-import javax.swing.JOptionPane;
 
 
 import org.xml.sax.InputSource;
@@ -29,6 +28,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Node;
 import org.w3c.dom.Element;
+
+import lombok.SneakyThrows;
 
 
 /**
@@ -502,12 +503,12 @@ public class Firmware
 
         if (!error && latestVersionAvailable>currentFirmware)
         {
-            response = JOptionPane.showConfirmDialog(null, "New firmware found. Execute update?", "Confirm",
-                                                     JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-            if (response == JOptionPane.YES_OPTION) 
-            {
-                error=doUpdateFirmware();
-            } 
+//            response = JOptionPane.showConfirmDialog(null, "New firmware found. Execute update?", "Confirm",
+//                                                     JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+//            if (response == JOptionPane.YES_OPTION)
+//            {
+//                error=doUpdateFirmware();
+//            }
         }
         else
         {
@@ -526,6 +527,7 @@ public class Firmware
      * @param productId Product ID of the watch
      * @return False if an error occurred, true if successful
      */
+    @SneakyThrows
     public boolean prepareFirmware(WatchInterface watchInterface, int productId)
     {
         boolean     error;

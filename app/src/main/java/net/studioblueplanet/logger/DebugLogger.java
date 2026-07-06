@@ -4,9 +4,7 @@
  */
 package net.studioblueplanet.logger;
 
-import hirondelle.date4j.DateTime;
-import java.util.TimeZone;
-import java.io.PrintStream;
+import android.util.Log;
 
 /**
  *
@@ -20,10 +18,7 @@ public class DebugLogger
     public static final int     DEBUGLEVEL_OFF  =3;
 
     private static int          debugLevel=DEBUGLEVEL_INFO;
-    
-    private static PrintStream  infoStream=System.out;
-    private static PrintStream  errorStream=System.err;
-    
+
     /**
      *  Private constructor: this class cannot be instantiated
      */
@@ -32,24 +27,6 @@ public class DebugLogger
         
     } 
      
-    /**
-     * Replace current error PrintStream with indicated one
-     * @param newErrorStream New PrintStream for error printing
-     */
-    public static void setErrorPrintStream(PrintStream newErrorStream)
-    {
-        errorStream=newErrorStream;
-    }
-    
-    /**
-     * Replace current info PrintStream with indicated one
-     * @param newInfoStream New PrintStream for info printing
-     */
-    public static void setInfoPrintStream(PrintStream newInfoStream)
-    {
-        infoStream=newInfoStream;
-    }
-    
     /**
      * Set debugging level
      * @param newDebugLevel The new debug level
@@ -84,6 +61,7 @@ public class DebugLogger
         {
             debugLevel=DEBUGLEVEL_OFF;
         }
+        Log.i(DebugLogger.class.getSimpleName(), "setDebugLevel: " + level + " => " + debugLevelToString());
     }
     
     /**
@@ -101,26 +79,21 @@ public class DebugLogger
      */
     public static void debug(String info)
     {
-        DateTime time;
         if (debugLevel<=DEBUGLEVEL_DEBUG)
         {
-            time=DateTime.now(TimeZone.getDefault());
-            infoStream.println("d " + time.format("YYYY-MM-DD hh:mm:ss  ")+info);
+            Log.d(DebugLogger.class.getSimpleName(), info);
         }
     }
 
-    
     /**
      * Write info. Info is written to System.out when debugging is on.
      * @param info The info
      */
     public static void info(String info)
     {
-        DateTime time;
         if (debugLevel<=DEBUGLEVEL_INFO)
         {
-            time=DateTime.now(TimeZone.getDefault());
-            infoStream.println("i "+time.format("YYYY-MM-DD hh:mm:ss  ")+info);
+            Log.i(DebugLogger.class.getSimpleName(), info);
         }
     }
 
@@ -131,11 +104,8 @@ public class DebugLogger
      */
     public static void error(String info)
     {
-        DateTime time;
-        if (debugLevel<=DEBUGLEVEL_ERROR)
-        {
-            time=DateTime.now(TimeZone.getDefault());
-            errorStream.println("e "+time.format("YYYY-MM-DD hh:mm:ss  ERROR: ")+info);
+        if (debugLevel<=DEBUGLEVEL_ERROR) {
+            Log.e(DebugLogger.class.getSimpleName(), info);
         }
     }
     

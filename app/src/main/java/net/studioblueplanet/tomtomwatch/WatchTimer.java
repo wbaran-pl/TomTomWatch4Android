@@ -35,7 +35,7 @@ public class WatchTimer extends TimerTask
     public void start()
     {
         timer = new Timer(true);
-        timer.scheduleAtFixedRate(this, 0, 1*1000);
+        timer.schedule(this, 0, 1*1000);
         DebugLogger.info("Watch Timer started");
     }
     

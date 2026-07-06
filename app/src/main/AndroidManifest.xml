@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:name="android.hardware.usb.host" />
+
+    <application
+        android:label="TomTomWatch"
+        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+
+        <activity android:name="pl.wojciechbaran.tomtomwatch.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="${stravaRedirectScheme}"
+                    android:host="${stravaRedirectHost}" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="pl.wojciechbaran.tomtomwatch.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+</manifest>

@@ -27,9 +27,10 @@ import hirondelle.date4j.DateTime;
 import java.io.RandomAccessFile;
 import java.io.File;
 
-import javax.swing.DefaultListModel;
 
 import org.json.JSONObject;
+
+import lombok.SneakyThrows;
 
 /**
  * This class executes the commands involving communication to the device.
@@ -1089,7 +1090,6 @@ public class CommunicationProcess implements ProgressListener
         boolean                 error;
         UsbFile                 file;
         Iterator<ActivityData>  it;
-        DefaultListModel        model;
         ActivityData           data;
         
         error=false;
@@ -1136,6 +1136,7 @@ public class CommunicationProcess implements ProgressListener
      * This method downloads the GPS QuickFix data from TomTom and uploads it to the
      * watch.
      */
+    @SneakyThrows
     private void uploadGpsData(WatchInterface watchInterface)
     {
         boolean         error;

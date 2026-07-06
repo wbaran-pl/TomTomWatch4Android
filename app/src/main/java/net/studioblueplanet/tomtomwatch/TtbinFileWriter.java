@@ -10,15 +10,17 @@ import net.studioblueplanet.logger.DebugLogger;
 import net.studioblueplanet.generics.ToolBox;
 
 import hirondelle.date4j.DateTime;
+import lombok.SneakyThrows;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.FileNotFoundException;
 import java.util.Arrays;
+import java.util.zip.GZIPOutputStream;
 
 import org.json.JSONObject;
-import org.json.JSONArray;
 
 /**
  * TTBIN file writer. Writes the TTBIN file. Contains functionality
@@ -161,6 +163,27 @@ public class TtbinFileWriter
     }
 
     /**
+     * Writes the UsbFile data to a gzipped output stream.
+     * @param outputStream The stream to write to
+     * @param file The file containing the raw data
+     * @return True if an error occurred, false if all went ok
+     */
+    public boolean writeGzippedTtbinToStream(OutputStream outputStream, UsbFile file)
+    {
+        boolean error = false;
+        try (GZIPOutputStream gzos = new GZIPOutputStream(outputStream))
+        {
+            gzos.write(file.fileData);
+        }
+        catch (IOException e)
+        {
+            error = true;
+            DebugLogger.error("Error writing gzipped to stream. " + e.getMessage());
+        }
+        return error;
+    }
+
+    /**
      * This method verifies the written file against the file data in file
      * @param fileName Name of the file to check
      * @param file File containing the data to check against
@@ -170,42 +193,6 @@ public class TtbinFileWriter
     {
         boolean             error;
         byte[]              inputBytes;
-/*        
-        RandomAccessFile    ttbinFile;
-        int                 fileSize;
-        
-        error=false;
-
-        try
-        {
-            ttbinFile   = new RandomAccessFile(fileName, "r");
-            fileSize    =(int)ttbinFile.length();
-            inputBytes  = new byte[fileSize];
-            ttbinFile.readFully(inputBytes);      
-            if (fileSize==file.length)
-            {
-                if (!Arrays.equals(file.fileData, inputBytes))
-                {
-                    error=true;
-                }
-            }
-            if (error)
-            {
-                DebugLogger.error("Error verifying ttbin file. Files not identical");
-            }
-            
-        }
-        catch (FileNotFoundException e)
-        {
-            DebugLogger.error("Error verifying ttbin file: "+e.getMessage());
-            error=true;
-        }
-        catch (IOException e)
-        {
-            DebugLogger.error("Error verifying ttbin file: "+e.getMessage());
-            error=true;
-        }
-*/
 
         error           =false;
         inputBytes      =ToolBox.readBytesFromFile(fileName);
@@ -235,6 +222,7 @@ public class TtbinFileWriter
     }
     
     
+    @SneakyThrows
     public boolean writeTtbinMetadataFile(String ttbinFileName, ActivityData data)
     {
         boolean     error;

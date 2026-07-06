@@ -5,11 +5,18 @@
  */
 package net.studioblueplanet.settings;
 
+import android.content.Context;
+
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
 import net.studioblueplanet.logger.DebugLogger;
+
+import lombok.Getter;
 
 /**
  *
@@ -17,12 +24,21 @@ import net.studioblueplanet.logger.DebugLogger;
  */
 public class ConfigSettings
 {
+    @Getter
+    private Context context;
+
+    public void setContext(Context context)
+    {
+        this.context = context;
+        this.readSettings();
+    }
+
     public enum SettingType
     {
         STRING, INT, DOUBLE, BOOLEAN
     }
         
-    class Setting
+    public class Setting
     {
 
         // Name of the setting in the property file
@@ -80,6 +96,7 @@ public class ConfigSettings
         new Setting("heightServiceKey"          , "Google Elevation service API key " , ""          , ""                       , SettingType.STRING ),
         new Setting("mapService"                , "Map service                      " , "osm"       , "none,osm,google"        , SettingType.STRING ),
         new Setting("mapServiceKey"             , "Google Maps service API key      " , ""          , ""                       , SettingType.STRING ),
+        new Setting("osmdroidCacheSize"         , "OsmDroid Tile Cache size (MB)    " , "100"       , "10,2000"                , SettingType.INT    ),
         new Setting("ephemerisUrl"              , "Ephemeris file service           " , 
                   "https://gpsquickfix.services.tomtom.com/fitness/sifgps.f2p{DAYS}enc.ee"          , ""                       , SettingType.STRING ),
         new Setting("quickFixDays"              , "GPS Quick Fix days ahead         " , "3"         , "3,14"                   , SettingType.INT    ),
@@ -122,6 +139,46 @@ public class ConfigSettings
     {
         propertyFileName=fileName;
     }
+
+    public Setting[] getSettings()
+    {
+        return settings;
+    }
+
+    public void updateSetting(String name, String value)
+    {
+        for (Setting setting : settings)
+        {
+            if (setting.name.equals(name))
+            {
+                setting.value = value;
+                validateSetting(setting);
+                break;
+            }
+        }
+    }
+
+    public void saveSettings()
+    {
+        if (context == null) return;
+
+        Properties properties = new Properties();
+        for (Setting setting : settings)
+        {
+            properties.setProperty(setting.name, setting.value);
+        }
+
+        File file = new File(context.getFilesDir(), propertyFileName);
+        try (FileOutputStream out = new FileOutputStream(file))
+        {
+            properties.store(out, "TomTomWatch Properties");
+            DebugLogger.info("Settings saved to " + file.getAbsolutePath());
+        }
+        catch (IOException e)
+        {
+            DebugLogger.error("Error saving settings: " + e.getMessage());
+        }
+    }
     
     /**
      * Reads the settings from the property file. If no file found, 
@@ -139,9 +196,53 @@ public class ConfigSettings
 
         // Read properties file.
         properties = new Properties();
+        InputStream is = null;
         try
         {
-            properties.load(new FileInputStream(propertyFileName));
+            // First try to load from internal storage
+            if (context != null)
+            {
+                File file = new File(context.getFilesDir(), propertyFileName);
+                if (file.exists())
+                {
+                    is = new FileInputStream(file);
+                    DebugLogger.info("Loading settings from internal storage: " + file.getAbsolutePath());
+                }
+            }
+
+            // Then try to load from Assets if context is available
+            if (is == null && context != null)
+            {
+                try
+                {
+                    is = context.getAssets().open(propertyFileName);
+                    DebugLogger.info("Loading settings from assets: " + propertyFileName);
+                }
+                catch (IOException e)
+                {
+                    DebugLogger.info("Settings file not found in assets, trying filesystem");
+                }
+            }
+
+            // If not found in assets or no context, try filesystem
+            if (is == null)
+            {
+                File file = new File(propertyFileName);
+                if (file.exists())
+                {
+                    is = new FileInputStream(file);
+                    DebugLogger.info("Loading settings from file: " + propertyFileName);
+                }
+            }
+
+            if (is != null) {
+                properties.load(is);
+                is.close();
+            }
+            else
+            {
+                DebugLogger.info("No settings file found, using defaults");
+            }
 
             // Get each setting from the array
             i=0;
@@ -170,7 +271,7 @@ public class ConfigSettings
 
             DebugLogger.info("Settings read");
             dumpSettings();
-        }    
+        }
         catch (IOException e)
         {
             DebugLogger.error("Error reading settings, using defaults. Error: "+e.getMessage());
