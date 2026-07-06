@@ -60,6 +60,8 @@ class MainActivity : Activity() {
     private val PREF_CONFIGURED = "app_configured"
     private val PREF_DEST_FOLDER_URI = "dest_folder_uri"
     private val PREF_STRAVA_TOKEN = "strava_access_token"
+    private val PREF_STRAVA_REFRESH_TOKEN = "strava_refresh_token"
+    private val PREF_STRAVA_EXPIRES_AT = "strava_expires_at"
     private val PREF_STRAVA_USERNAME = "strava_username"
     private val PREF_STRAVA_CLIENT_ID = "strava_client_id"
     private val PREF_STRAVA_CLIENT_SECRET = "strava_client_secret"
@@ -708,6 +710,8 @@ class MainActivity : Activity() {
                     val body = it.body?.string() ?: return
                     val json = JSONObject(body)
                     val accessToken = json.getString("access_token")
+                    val refreshToken = json.getString("refresh_token")
+                    val expiresAt = json.getLong("expires_at")
                     val athlete = json.getJSONObject("athlete")
                     val firstName = athlete.optString("firstname", "")
                     val lastName = athlete.optString("lastname", "")
@@ -715,6 +719,8 @@ class MainActivity : Activity() {
 
                     getPreferences(MODE_PRIVATE).edit()
                         .putString(PREF_STRAVA_TOKEN, accessToken)
+                        .putString(PREF_STRAVA_REFRESH_TOKEN, refreshToken)
+                        .putLong(PREF_STRAVA_EXPIRES_AT, expiresAt)
                         .putString(PREF_STRAVA_USERNAME, username)
                         .apply()
 
@@ -726,6 +732,78 @@ class MainActivity : Activity() {
                 }
             }
         })
+    }
+
+    private fun refreshStravaToken(onComplete: (Boolean) -> Unit) {
+        val clientId = getStravaClientId()
+        val clientSecret = getStravaClientSecret()
+        val refreshToken = getPreferences(MODE_PRIVATE).getString(PREF_STRAVA_REFRESH_TOKEN, null)
+
+        if (refreshToken == null) {
+            onComplete(false)
+            return
+        }
+
+        val formBody = FormBody.Builder()
+            .add("client_id", clientId)
+            .add("client_secret", clientSecret)
+            .add("grant_type", "refresh_token")
+            .add("refresh_token", refreshToken)
+            .build()
+
+        val request = Request.Builder()
+            .url("https://www.strava.com/oauth/token")
+            .post(formBody)
+            .build()
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                onComplete(false)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!it.isSuccessful) {
+                        if (it.code == 400 || it.code == 401) {
+                            runOnUiThread { stravaLogout() }
+                        }
+                        onComplete(false)
+                        return
+                    }
+                    val body = it.body?.string() ?: return
+                    val json = JSONObject(body)
+                    val newAccessToken = json.getString("access_token")
+                    val newRefreshToken = json.getString("refresh_token")
+                    val newExpiresAt = json.getLong("expires_at")
+
+                    getPreferences(MODE_PRIVATE).edit()
+                        .putString(PREF_STRAVA_TOKEN, newAccessToken)
+                        .putString(PREF_STRAVA_REFRESH_TOKEN, newRefreshToken)
+                        .putLong(PREF_STRAVA_EXPIRES_AT, newExpiresAt)
+                        .apply()
+                    onComplete(true)
+                }
+            }
+        })
+    }
+
+    private fun ensureStravaToken(onReady: (String?) -> Unit) {
+        val prefs = getPreferences(MODE_PRIVATE)
+        val token = prefs.getString(PREF_STRAVA_TOKEN, null)
+        val expiresAt = prefs.getLong(PREF_STRAVA_EXPIRES_AT, 0)
+        
+        // Refresh if expired or expires in less than 5 minutes
+        if (token != null && (expiresAt * 1000) < (System.currentTimeMillis() + 300000)) {
+            refreshStravaToken { success ->
+                if (success) {
+                    onReady(getPreferences(MODE_PRIVATE).getString(PREF_STRAVA_TOKEN, null))
+                } else {
+                    onReady(null)
+                }
+            }
+        } else {
+            onReady(token)
+        }
     }
 
     private fun loadStravaInfo() {
@@ -744,6 +822,8 @@ class MainActivity : Activity() {
     private fun stravaLogout() {
         getPreferences(MODE_PRIVATE).edit()
             .remove(PREF_STRAVA_TOKEN)
+            .remove(PREF_STRAVA_REFRESH_TOKEN)
+            .remove(PREF_STRAVA_EXPIRES_AT)
             .remove(PREF_STRAVA_USERNAME)
             .apply()
         loadStravaInfo()
@@ -1041,150 +1121,168 @@ class MainActivity : Activity() {
         val entry = selectedOfflineEntry ?: return
         val token = getPreferences(MODE_PRIVATE).getString(PREF_STRAVA_TOKEN, null) ?: return
 
-        Thread {
-            var tempFile: File? = null
-            try {
+        ensureStravaToken { token ->
+            if (token == null) {
                 runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Preparing upload...", Toast.LENGTH_SHORT).show()
-                    watchView?.appendStatus("Strava: Preparing upload...\n")
+                    Toast.makeText(this, "Failed to refresh Strava token. Please login again.", Toast.LENGTH_LONG).show()
                 }
+                return@ensureStravaToken
+            }
 
-                contentResolver.openInputStream(entry.file.uri)?.use { bis ->
-                    GZIPInputStream(bis).use { gzis ->
-                        val bytes = gzis.readBytes()
-                        val usbFile = UsbFile()
-                        usbFile.fileData = bytes
-                        val activity = TomTomReader.getInstance().readTtbinFile(usbFile) ?: return@use
+            Thread {
+                var tempFile: File? = null
+                try {
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "Preparing upload...", Toast.LENGTH_SHORT).show()
+                        watchView?.appendStatus("Strava: Preparing upload...\n")
+                    }
 
-                        tempFile = File.createTempFile("strava_upload", if (params.useGzip) ".gpx.gz" else ".gpx", cacheDir)
-                        
-                        FileOutputStream(tempFile).use { fos ->
-                            if (params.useGzip) {
-                                GZIPOutputStream(fos).use { gzos ->
-                                    GpxWriter.getInstance().writeTrackToStream(gzos, activity, "TomTomWatch4Android")
-                                }
-                            } else {
-                                GpxWriter.getInstance().writeTrackToStream(fos, activity, "TomTomWatch4Android")
-                            }
-                        }
+                    contentResolver.openInputStream(entry.file.uri)?.use { bis ->
+                        GZIPInputStream(bis).use { gzis ->
+                            val bytes = gzis.readBytes()
+                            val usbFile = UsbFile()
+                            usbFile.fileData = bytes
+                            val activity = TomTomReader.getInstance().readTtbinFile(usbFile) ?: return@use
 
-                        val builder = MultipartBody.Builder()
-                            .setType(MultipartBody.FORM)
-                            .addFormDataPart("file", tempFile!!.name,
-                                tempFile!!.asRequestBody("application/octet-stream".toMediaType()))
-                            .addFormDataPart("trainer", params.trainer)
-                            .addFormDataPart("commute", params.commute)
-                            .addFormDataPart("data_type", if (params.useGzip) "gpx.gz" else "gpx")
-                            .addFormDataPart("external_id", params.externalId)
-
-                        if (params.name.isNotBlank()) {
-                            builder.addFormDataPart("name", params.name)
-                        }
-                        if (params.description.isNotBlank()) {
-                            builder.addFormDataPart("description", params.description)
-                        }
-
-                        val requestBody = builder.build()
-
-                        val request = Request.Builder()
-                            .url("https://www.strava.com/api/v3/uploads")
-                            .header("Authorization", "Bearer $token")
-                            .post(requestBody)
-                            .build()
-
-                        httpClient.newCall(request).enqueue(object : Callback {
-                            override fun onFailure(call: Call, e: IOException) {
-                                tempFile?.delete()
-                                runOnUiThread { 
-                                    val msg = "Upload failed: ${e.message}"
-                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show() 
-                                    watchView?.appendStatus("Strava: $msg\n")
+                            tempFile = File.createTempFile("strava_upload", if (params.useGzip) ".gpx.gz" else ".gpx", cacheDir)
+                            
+                            FileOutputStream(tempFile).use { fos ->
+                                if (params.useGzip) {
+                                    GZIPOutputStream(fos).use { gzos ->
+                                        GpxWriter.getInstance().writeTrackToStream(gzos, activity, "TomTomWatch4Android")
+                                    }
+                                } else {
+                                    GpxWriter.getInstance().writeTrackToStream(fos, activity, "TomTomWatch4Android")
                                 }
                             }
-                            override fun onResponse(call: Call, response: Response) {
-                                tempFile?.delete()
-                                response.use {
-                                    if (it.isSuccessful) {
-                                        val body = it.body?.string() ?: ""
-                                        val json = JSONObject(body)
-                                        val uploadId = json.optLong("id")
-                                        runOnUiThread { 
-                                            watchView?.appendStatus("Strava: Upload started (ID: $uploadId). Polling status...\n")
-                                            pollUploadStatus(uploadId, token)
-                                        }
-                                    } else {
-                                        val errBody = it.body?.string() ?: ""
-                                        runOnUiThread { 
-                                            val msg = "Upload failed: ${it.code} $errBody"
-                                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show() 
-                                            watchView?.appendStatus("Strava: $msg\n")
+
+                            val builder = MultipartBody.Builder()
+                                .setType(MultipartBody.FORM)
+                                .addFormDataPart("file", tempFile!!.name,
+                                    tempFile!!.asRequestBody("application/octet-stream".toMediaType()))
+                                .addFormDataPart("trainer", params.trainer)
+                                .addFormDataPart("commute", params.commute)
+                                .addFormDataPart("data_type", if (params.useGzip) "gpx.gz" else "gpx")
+                                .addFormDataPart("external_id", params.externalId)
+
+                            if (params.name.isNotBlank()) {
+                                builder.addFormDataPart("name", params.name)
+                            }
+                            if (params.description.isNotBlank()) {
+                                builder.addFormDataPart("description", params.description)
+                            }
+
+                            val requestBody = builder.build()
+
+                            val request = Request.Builder()
+                                .url("https://www.strava.com/api/v3/uploads")
+                                .header("Authorization", "Bearer $token")
+                                .post(requestBody)
+                                .build()
+
+                            httpClient.newCall(request).enqueue(object : Callback {
+                                override fun onFailure(call: Call, e: IOException) {
+                                    tempFile?.delete()
+                                    runOnUiThread { 
+                                        val msg = "Upload failed: ${e.message}"
+                                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show() 
+                                        watchView?.appendStatus("Strava: $msg\n")
+                                    }
+                                }
+                                override fun onResponse(call: Call, response: Response) {
+                                    tempFile?.delete()
+                                    response.use {
+                                        if (it.isSuccessful) {
+                                            val body = it.body?.string() ?: ""
+                                            val json = JSONObject(body)
+                                            val uploadId = json.optLong("id")
+                                            runOnUiThread { 
+                                                watchView?.appendStatus("Strava: Upload started (ID: $uploadId). Polling status...\n")
+                                                pollUploadStatus(uploadId)
+                                            }
+                                        } else {
+                                            val errBody = it.body?.string() ?: ""
+                                            runOnUiThread { 
+                                                val msg = "Upload failed: ${it.code} $errBody"
+                                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show() 
+                                                watchView?.appendStatus("Strava: $msg\n")
+                                            }
                                         }
                                     }
                                 }
-                            }
-                        })
+                            })
+                        }
                     }
+                } catch (e: Exception) {
+                    tempFile?.delete()
+                    Log.e("Strava", "Export error", e)
+                    runOnUiThread { watchView?.appendStatus("Strava Error: ${e.message}\n") }
                 }
-            } catch (e: Exception) {
-                tempFile?.delete()
-                Log.e("Strava", "Export error", e)
-                runOnUiThread { watchView?.appendStatus("Strava Error: ${e.message}\n") }
-            }
-        }.start()
+            }.start()
+        }
     }
 
-    private fun pollUploadStatus(uploadId: Long, token: String) {
-        val request = Request.Builder()
-            .url("https://www.strava.com/api/v3/uploads/$uploadId")
-            .header("Authorization", "Bearer $token")
-            .get()
-            .build()
-
-        httpClient.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
+    private fun pollUploadStatus(uploadId: Long) {
+        ensureStravaToken { token ->
+            if (token == null) {
                 runOnUiThread { 
-                    val msg = "Status check failed: ${e.message}"
-                    watchView?.appendStatus("Strava: $msg\n")
+                    watchView?.appendStatus("Strava: Polling failed - could not refresh token.\n")
                 }
+                return@ensureStravaToken
             }
 
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    if (!it.isSuccessful) return
-                    val body = it.body?.string() ?: return
-                    val json = JSONObject(body)
-                    val status = json.optString("status")
-                    val error = json.optString("error")
-                    val activityId = json.optLong("activity_id", 0L)
+            val request = Request.Builder()
+                .url("https://www.strava.com/api/v3/uploads/$uploadId")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
 
-                    runOnUiThread {
-                        watchView?.appendStatus("Strava Status: $status\n")
-                        when {
-                            error.isNotEmpty() && error != "null" -> {
-                                Toast.makeText(this@MainActivity, "Strava Error: $error", Toast.LENGTH_LONG).show()
-                                watchView?.appendStatus("Strava: Error details: $error\n")
-                            }
-                            status.contains("ready", ignoreCase = true) -> {
-                                Toast.makeText(this@MainActivity, "Strava activity ready! ID: $activityId", Toast.LENGTH_LONG).show()
-                                if (activityId != 0L) {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.strava.com/activities/$activityId"))
-                                        startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Log.e("Strava", "Failed to open Strava activity", e)
-                                        watchView?.appendStatus("Strava: Activity ready but failed to open browser/app.\n")
+            httpClient.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    runOnUiThread { 
+                        val msg = "Status check failed: ${e.message}"
+                        watchView?.appendStatus("Strava: $msg\n")
+                    }
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    response.use {
+                        if (!it.isSuccessful) return
+                        val body = it.body?.string() ?: return
+                        val json = JSONObject(body)
+                        val status = json.optString("status")
+                        val error = json.optString("error")
+                        val activityId = json.optLong("activity_id", 0L)
+
+                        runOnUiThread {
+                            watchView?.appendStatus("Strava Status: $status\n")
+                            when {
+                                error.isNotEmpty() && error != "null" -> {
+                                    Toast.makeText(this@MainActivity, "Strava Error: $error", Toast.LENGTH_LONG).show()
+                                    watchView?.appendStatus("Strava: Error details: $error\n")
+                                }
+                                status.contains("ready", ignoreCase = true) -> {
+                                    Toast.makeText(this@MainActivity, "Strava activity ready! ID: $activityId", Toast.LENGTH_LONG).show()
+                                    if (activityId != 0L) {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.strava.com/activities/$activityId"))
+                                            startActivity(intent)
+                                        } catch (e: Exception) {
+                                            Log.e("Strava", "Failed to open Strava activity", e)
+                                            watchView?.appendStatus("Strava: Activity ready but failed to open browser/app.\n")
+                                        }
                                     }
                                 }
-                            }
-                            else -> {
-                                // Continue polling after 2 seconds
-                                mainHandler.postDelayed({ pollUploadStatus(uploadId, token) }, 2000)
+                                else -> {
+                                    // Continue polling after 2 seconds
+                                    mainHandler.postDelayed({ pollUploadStatus(uploadId) }, 2000)
+                                }
                             }
                         }
                     }
                 }
-            }
-        })
+            })
+        }
     }
 
     private fun requestUsbPermission(device: UsbDevice) {
