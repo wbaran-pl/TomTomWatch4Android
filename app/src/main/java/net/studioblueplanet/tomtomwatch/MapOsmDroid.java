@@ -37,19 +37,18 @@ public class MapOsmDroid extends Map {
         this.trackLines = new ArrayList<>();
         this.waypoints = new ArrayList<>();
 
+        // Ensure the map is clear of any previous overlays
+        clearMap();
+
         // Basic map configuration
         mapView.setMultiTouchControls(true);
         mapView.getController().setZoom(15.0);
     }
 
     private void clearMap() {
-        for (Polyline line : trackLines) {
-            mapView.getOverlayManager().remove(line);
-        }
+        // More robust way to clear all overlays from the map view
+        mapView.getOverlays().clear();
         trackLines.clear();
-        for (Marker marker : waypoints) {
-            mapView.getOverlayManager().remove(marker);
-        }
         waypoints.clear();
     }
 

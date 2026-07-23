@@ -146,6 +146,7 @@ class MainActivity : Activity() {
     // Business Logic components
     private var commProcess: CommunicationProcess? = null
     private var watchView: AndroidWatchView? = null
+    private var offlineMapOsm: MapOsmDroid? = null
 
     private var selectedActivityIndex: Int = -1
     private var selectedOfflineEntry: OfflineFileEntry? = null
@@ -1004,8 +1005,10 @@ class MainActivity : Activity() {
                         data.ttbinSaved = true
 
                         runOnUiThread {
-                            val mapOsm = MapOsmDroid(offlineMapView)
-                            mapOsm.showTrack(data)
+                            if (offlineMapOsm == null) {
+                                offlineMapOsm = MapOsmDroid(offlineMapView)
+                            }
+                            offlineMapOsm?.showTrack(data)
                             
                             offlineActivityInfo.text = TomTomWatchView.getActivityDescription(data, "local")
                         }
@@ -1023,6 +1026,7 @@ class MainActivity : Activity() {
         offlineListContainer.isVisible = true
         selectedOfflineEntry = null
         offlineActivityInfo.text = ""
+        offlineMapOsm?.hideTrack()
     }
 
     private fun startExportGpx() {
