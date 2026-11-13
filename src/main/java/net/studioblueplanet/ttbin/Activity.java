@@ -89,6 +89,18 @@ public class Activity
     private                 double                      prevLon=0.0;
     private                 int                         skippedPoints=0;
     private                 int                         validPoints=0;
+
+    private                 int                         wheelSize;
+    private                 int                         previousWheelRevolutions;
+    private                 int                         previousWheelRevolutionsTime;
+    private                 int                         previousCrankRevolutions;
+    private                 int                         previousCrankRevolutionsTime;
+    private                 int                         cyclingCadence;
+    private                 double                      wheelSpeed;
+    private                 int                         cadenceWatchdog;
+    private                 int                         wheelSpeedWatchdog;
+    private                 boolean                     cadenceAvailable;
+    private                 boolean                     wheelSpeedAvailable;
     
     /* ******************************************************************************************* *\
      * CONSTRUCTOR
@@ -433,7 +445,6 @@ public class Activity
         double      latF;
         double      lonF;
         
-        
         lat         =ToolBox.readInt(recordData,  1, 4, true);
         lon         =ToolBox.readInt(recordData,  5, 4, true);
         heading     =ToolBox.readUnsignedInt(recordData,  9, 2, true);
@@ -463,6 +474,14 @@ public class Activity
                 newRecord.setInstantaneousSpeed(Float.intBitsToFloat(instantSpeed));
                 newRecord.setDistance(Float.intBitsToFloat(cumDistance));
                 newRecord.setCycles(cycles);
+                if (cadenceAvailable)
+                {
+                    newRecord.setCyclingCadence(cyclingCadence);
+                }
+                if (wheelSpeedAvailable)
+                {
+                    newRecord.setSpeed(wheelSpeed);
+                }
 
                 // Sets the current value of the batterylevel
                 newRecord.setBatteryLevel(this.batteryLevel);
@@ -474,12 +493,131 @@ public class Activity
             {
                 skippedPoints++;
             }
+            if (timestamp!=0 && (lat!=0 || lon!=0))
+            {
+                tickCyclingCadenceWatchdogs();
+            }
         }
         else
         {
             DebugLogger.info("Invalid record");
         }
     }
+
+    /**
+     * Parse the configured bicycle wheel circumference, in millimetres.
+     * @param recordData The record data
+     */
+    private void parseRecordWheelSize(byte[] recordData)
+    {
+        wheelSize=ToolBox.readUnsignedInt(recordData, 1, 4, true);
+    }
+
+    /**
+     * Parse a cycling sensor sample and update the estimated cadence and speed.
+     * The counters and their millisecond clocks are 16-bit values and wrap.
+     * @param recordData The record data
+     */
+    private void parseRecordCyclingCadence(byte[] recordData)
+    {
+        int wheelRevolutions=ToolBox.readUnsignedInt(recordData, 1, 4, true)&0xffff;
+        int wheelRevolutionsTime=ToolBox.readUnsignedInt(recordData, 5, 2, true);
+        int crankRevolutions=ToolBox.readUnsignedInt(recordData, 7, 2, true);
+        int crankRevolutionsTime=ToolBox.readUnsignedInt(recordData, 9, 2, true);
+
+        if (previousCrankRevolutions!=crankRevolutions)
+        {
+            if (cadenceAvailable)
+            {
+                long revolutionDelta=counterDelta(crankRevolutions, previousCrankRevolutions);
+                long timeDelta=counterDelta(crankRevolutionsTime, previousCrankRevolutionsTime);
+                cyclingCadence=timeDelta==0 ? 0 : (int)(60000L*revolutionDelta/timeDelta);
+                if (cyclingCadence>200)
+                {
+                    cyclingCadence=0;
+                }
+            }
+            else
+            {
+                cadenceAvailable=true;
+            }
+            previousCrankRevolutions=crankRevolutions;
+            previousCrankRevolutionsTime=crankRevolutionsTime;
+            cadenceWatchdog=0;
+        }
+
+        if (previousWheelRevolutions!=wheelRevolutions && wheelSize>0)
+        {
+            if (wheelSpeedAvailable)
+            {
+                long revolutionDelta=counterDelta(wheelRevolutions, previousWheelRevolutions);
+                long timeDelta=counterDelta(wheelRevolutionsTime, previousWheelRevolutionsTime);
+                wheelSpeed=timeDelta==0 ? 0.0 : (double)wheelSize*revolutionDelta/timeDelta;
+                if (wheelSpeed>35.0)
+                {
+                    wheelSpeed=0.0;
+                }
+            }
+            else
+            {
+                wheelSpeedAvailable=true;
+            }
+            previousWheelRevolutions=wheelRevolutions;
+            previousWheelRevolutionsTime=wheelRevolutionsTime;
+            wheelSpeedWatchdog=0;
+        }
+    }
+
+    /**
+     * Parse an indoor cycling sample.
+     * @param recordData The record data
+     */
+    private void parseRecordIndoorCycling(byte[] recordData)
+    {
+        long timestamp=ToolBox.readUnsignedLong(recordData, 1, 4, true);
+        double distance=Float.intBitsToFloat(ToolBox.readUnsignedInt(recordData, 5, 4, true));
+        int calories=ToolBox.readUnsignedInt(recordData, 9, 2, true);
+
+        if (timestamp!=0 && timestamp!=0xffffffffL && newActivitySegment!=null)
+        {
+            newRecord=new ActivityRecord();
+            newRecord.setUtcTime(timestamp);
+            newRecord.setDistance(distance);
+            newRecord.setCalories(calories);
+            if (cadenceAvailable)
+            {
+                newRecord.setCyclingCadence(cyclingCadence);
+            }
+            if (wheelSpeedAvailable)
+            {
+                newRecord.setSpeed(wheelSpeed);
+            }
+            newActivitySegment.addRecordIncludingDuplicates(newRecord);
+            tickCyclingCadenceWatchdogs();
+        }
+    }
+
+    private long counterDelta(int current, int previous)
+    {
+        int delta=current-previous;
+        // Match ttwatch's 16-bit rollover adjustment so exports align with its samples.
+        return delta<0 ? delta+0xffffL : delta;
+    }
+
+    private void tickCyclingCadenceWatchdogs()
+    {
+        if (cadenceWatchdog++>3)
+        {
+            cadenceWatchdog=0;
+            cyclingCadence=0;
+        }
+        if (wheelSpeedWatchdog++>3)
+        {
+            wheelSpeedWatchdog=0;
+            wheelSpeed=0.0;
+        }
+    }
+
 
     /**
      * Parse the gym record
@@ -967,6 +1105,15 @@ public class Activity
             // Scope: activity record
             case TtbinFileDefinition.TAG_GPS:
                 parseRecordGps(recordData);
+                break;
+            case TtbinFileDefinition.TAG_WHEEL_SIZE:
+                parseRecordWheelSize(recordData);
+                break;
+            case TtbinFileDefinition.TAG_CYCLING_CADENCE:
+                parseRecordCyclingCadence(recordData);
+                break;
+            case TtbinFileDefinition.TAG_INDOOR_CYCLING:
+                parseRecordIndoorCycling(recordData);
                 break;
             case TtbinFileDefinition.TAG_GYM:
                 parseRecordGym(recordData);

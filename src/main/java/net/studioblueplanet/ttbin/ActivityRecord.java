@@ -35,6 +35,7 @@ public class ActivityRecord implements Comparable<ActivityRecord>
     private             double      calories;           // calories
     private             double      distance;           // Cumulative distance since beginning
     private             int         cycles;             // running = steps/sec, cycling = crank rpm
+    private             boolean     cyclingCadenceAvailable;
     private             double      instantSpeed;       // Unfiltered speed (?) in m/s
     private             double      elevation1;         // Elevation 1 from GPS record - absolute elevation
     private             double      elevation2;         // Elevation 2 from GPS record - calibrated around 0
@@ -329,6 +330,25 @@ public class ActivityRecord implements Comparable<ActivityRecord>
     public int getCycles()
     {
         return this.cycles;
+    }
+
+    /**
+     * Sets cadence calculated from the cycling cadence sensor.
+     * @param cadence Cadence in crank revolutions per minute
+     */
+    public void setCyclingCadence(int cadence)
+    {
+        this.cycles=cadence;
+        this.cyclingCadenceAvailable=true;
+    }
+
+    /**
+     * Returns whether cadence was calculated from the cycling cadence sensor.
+     * @return True if cycling cadence data is available
+     */
+    public boolean hasCyclingCadence()
+    {
+        return this.cyclingCadenceAvailable;
     }
     
     /**

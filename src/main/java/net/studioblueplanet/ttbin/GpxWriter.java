@@ -383,6 +383,7 @@ public class GpxWriter implements TrackWriter
         String                      dateTimeString;
         int                         temperature;
         int                         heartRate;
+        int                         cadence;
         double                      latitude;
         double                      longitude;
         double                      elevation;
@@ -409,6 +410,7 @@ public class GpxWriter implements TrackWriter
             longitude       =point.getLongitude();
             elevation       =point.getDerivedElevation();
             heartRate       =point.getHeartRate();
+            cadence         =point.getCycles();
             temperature     =point.getTemperature();
             speed           =point.getSpeed();
             ehpe            =point.getEhpe();
@@ -461,14 +463,24 @@ public class GpxWriter implements TrackWriter
                     // GPXTPX Extension: heartrate (for Strava compatibility)
                     if (garminGpxExtensions)
                     {
-                        if ((heartRate!=ActivityRecord.INVALID) && (heartRate>0))
+                        boolean hasCadence=point.hasCyclingCadence();
+                        if (((heartRate!=ActivityRecord.INVALID) && (heartRate>0)) || hasCadence)
                         {
                             gpxtpxElement = doc.createElement("gpxtpx:TrackPointExtension");
                             extensionsElement.appendChild(gpxtpxElement);
 
-                            element    = doc.createElement("gpxtpx:hr");
-                            element.appendChild(doc.createTextNode(String.valueOf(heartRate)));
-                            gpxtpxElement.appendChild(element);		    
+                            if ((heartRate!=ActivityRecord.INVALID) && (heartRate>0))
+                            {
+                                element    = doc.createElement("gpxtpx:hr");
+                                element.appendChild(doc.createTextNode(String.valueOf(heartRate)));
+                                gpxtpxElement.appendChild(element);
+                            }
+                            if (hasCadence)
+                            {
+                                element    = doc.createElement("gpxtpx:cad");
+                                element.appendChild(doc.createTextNode(String.valueOf(cadence)));
+                                gpxtpxElement.appendChild(element);
+                            }
                         }
                     }
 

@@ -146,8 +146,10 @@ public class TcxWriter implements TrackWriter
         ActivitySegment segment;
         String          trackName;
         String          trackDescription;
+        boolean         indoorCycling;
         
         numberOfSegments=track.getNumberOfSegments();
+        indoorCycling=track.getActivityType()==TtbinFileDefinition.ACTIVITY_INDOORCYCLING;
 
         trackName           ="Track - "+track.getActivityDescription();
         trackDescription    ="Created by: "+appName+". Logged by: \'"+track.getDeviceName()+"\' (serial: "+track.getDeviceSerialNumber()+"). "+
@@ -171,6 +173,7 @@ public class TcxWriter implements TrackWriter
                 attr.setValue("Running");
                 break;
             case TtbinFileDefinition.ACTIVITY_CYCLING:
+            case TtbinFileDefinition.ACTIVITY_INDOORCYCLING:
                 attr.setValue("Biking");
                 break;
             default:
@@ -226,8 +229,9 @@ public class TcxWriter implements TrackWriter
                 double longitude       =rec.getLongitude();
 
                 if ((dateTime!=null) && 
-                        (latitude!=ActivityRecord.INVALID) && (longitude!=ActivityRecord.INVALID) && 
-                        (latitude!=0.0) && (longitude!=0.0))
+                        (indoorCycling ||
+                        ((latitude!=ActivityRecord.INVALID) && (longitude!=ActivityRecord.INVALID) &&
+                        (latitude!=0.0) && (longitude!=0.0))))
                 {             
                     double heading         =rec.getHeading();
                     double calories        =rec.getCalories();
@@ -248,14 +252,17 @@ public class TcxWriter implements TrackWriter
                     timeElement.appendChild(doc.createTextNode(dateTimeString));
                     pointElement.appendChild(timeElement);
 
-                    Element positionElement=doc.createElement("Position");
-                    pointElement.appendChild(positionElement);
-                    element=doc.createElement("LatitudeDegrees");
-                    element.appendChild(doc.createTextNode((String.format("%.7f", latitude))));
-                    positionElement.appendChild(element);
-                    element=doc.createElement("LongitudeDegrees");
-                    element.appendChild(doc.createTextNode((String.format("%.7f", longitude))));
-                    positionElement.appendChild(element);
+                    if (!indoorCycling)
+                    {
+                        Element positionElement=doc.createElement("Position");
+                        pointElement.appendChild(positionElement);
+                        element=doc.createElement("LatitudeDegrees");
+                        element.appendChild(doc.createTextNode((String.format("%.7f", latitude))));
+                        positionElement.appendChild(element);
+                        element=doc.createElement("LongitudeDegrees");
+                        element.appendChild(doc.createTextNode((String.format("%.7f", longitude))));
+                        positionElement.appendChild(element);
+                    }
                     
                     // The elevation.
                     if (elevation!=ActivityRecord.INVALID)
@@ -280,6 +287,14 @@ public class TcxWriter implements TrackWriter
                         Element valueElement =doc.createElement("Value");
                         valueElement.appendChild(doc.createTextNode(String.valueOf(heartRate)));
                         hrElement.appendChild(valueElement);
+                    }
+
+                    if ((track.getActivityType()==TtbinFileDefinition.ACTIVITY_CYCLING || indoorCycling) &&
+                            rec.hasCyclingCadence())
+                    {
+                        element=doc.createElement("Cadence");
+                        element.appendChild(doc.createTextNode(String.valueOf(rec.getCycles())));
+                        pointElement.appendChild(element);
                     }
                 }
             }

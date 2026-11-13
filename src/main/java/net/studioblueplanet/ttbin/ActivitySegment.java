@@ -58,10 +58,16 @@ public class ActivitySegment
                 records.add(record);
             }
         }
+
         else
         {
             records.add(record);
         }
+    }
+
+    void addRecordIncludingDuplicates(ActivityRecord record)
+    {
+        records.add(record);
     }
     
     /** 
